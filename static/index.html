@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PitStop V2 · Cantina Universitária CESAR (15 Minutos)</title>
+  <link rel="icon" type="image/svg+xml" href="/static/logo.svg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['"Plus Jakarta Sans"', 'Inter', 'sans-serif'],
+            mono: ['"JetBrains Mono"', 'monospace'],
+          },
+          colors: {
+            pitstop: {
+              orange: '#EE651D',
+              orangeHover: '#D95614',
+              orangeSoft: '#FFF3EC',
+              cream: '#FAF3EB',
+              beige: '#F4ECE1',
+              charcoal: '#1C1C1E',
+            },
+            brand: { DEFAULT: '#EE651D', soft: '#FFF3EC', dark: '#C84B0B' },
+            ink: '#1C1C1E',
+          },
+          boxShadow: {
+            card: '0 2px 8px rgba(28, 28, 30, 0.04), 0 8px 24px rgba(28, 28, 30, 0.04)',
+            orangeGlow: '0 8px 24px rgba(238, 101, 29, 0.28)',
+          },
+        },
+      },
+    };
+  </script>
+  <style>
+    body { font-family: 'Plus Jakarta Sans', sans-serif; -webkit-font-smoothing: antialiased; }
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    .fade-in { animation: fadeIn .18s ease-out; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+    @keyframes tvGlow {
+      0%, 100% { box-shadow: 0 0 20px rgba(238, 101, 29, 0.25); }
+      50% { box-shadow: 0 0 38px rgba(238, 101, 29, 0.6); }
+    }
+    .tv-glow { animation: tvGlow 2s infinite ease-in-out; }
+    @keyframes subtleBlink {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.35; }
+    }
+    .blink-dot { animation: subtleBlink 1.4s infinite; }
+    @keyframes slideDownAlert {
+      0% { transform: translateY(-120%); opacity: 0; }
+      70% { transform: translateY(4px); opacity: 1; }
+      100% { transform: translateY(0); opacity: 1; }
+    }
+    .slide-down-alert { animation: slideDownAlert 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+  </style>
+</head>
+<body class="bg-[#F3EFEA] text-[#1C1C1E] min-h-screen">
+  <div id="app-root"></div>
+  <script src="/static/app.js"></script>
+</body>
+</html>
