@@ -123,12 +123,14 @@ const state = {
   selectedTimeSlot: '15:45',
   projectionLocation: 'BRUM',
   staffMetricsLocation: 'ALL',
-  selectedPayment: 'PIX', // 'PIX' | 'BALCAO' | 'COMBO_DIA' | 'PITSTOP_WALLET' | 'RESIDENCY_VOUCHER'
+  selectedPayment: 'PIX', // 'PIX' | 'CARTAO' | 'COMBO_DIA' | 'PITSTOP_WALLET' | 'RESIDENCY_VOUCHER'
   activeCouponCode: null, // null | 'COMBO_DIA' | 'PITSTOP_WALLET' | 'RESIDENCY_VOUCHER'
   pixPaymentConfirmed: false,
   studentOrderIds: [],
   currentOrder: null,
   selectedProductModal: null,
+  showSupportModal: false,
+  supportTopic: 'Dúvida sobre ingrediente / alergia',
   studentAlert: null,
   staffAlert: null,
   studentLoading: null,
@@ -473,13 +475,73 @@ async function handleOrderSubmit() {
       state.data = result.state;
       state.studentOrderIds.push(result.order.id);
       state.currentOrder = result.order;
-      state.pixPaymentConfirmed = payload.payment_method === 'BALCAO';
+      state.pixPaymentConfirmed = payload.payment_method === 'CARTAO' || payload.payment_method === 'BALCAO';
       state.studentScreen = 'pix';
       sounds.play('newOrder');
     } catch (err) {
       showStudentAlert('Erro de conexão', 'Não foi possível enviar o pedido.');
     }
   });
+}
+
+function openSupportModal() {
+  state.showSupportModal = true;
+  renderStudentOnly();
+}
+
+function closeSupportModal() {
+  state.showSupportModal = false;
+  renderStudentOnly();
+}
+
+async function handleSendSupportRequest(e) {
+  if (e) e.preventDefault();
+  const msgInput = document.getElementById('support-message-input');
+  const message = msgInput && msgInput.value.trim()
+    ? msgInput.value.trim()
+    : `Preciso de ajuda com: ${state.supportTopic}`;
+
+  await withStudentLoading('Chamando atendente Patrícia...', async () => {
+    try {
+      const res = await fetch('/api/support', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          student_name: state.studentName || 'Lucas (CC)',
+          pickup_location: state.selectedLocation || 'BRUM',
+          topic: state.supportTopic,
+          message
+        })
+      });
+      const result = await res.json();
+      if (res.ok) {
+        state.data = result.state;
+        state.showSupportModal = false;
+        sounds.play('call');
+        showStudentAlert('Suporte acionado! 👩‍🍳', 'A atendente Patrícia recebeu seu chamado no painel da cantina.');
+        showStaffAlert(`Chamado de Suporte (${result.ticket.location_name})`, `${result.ticket.student_name}: ${result.ticket.topic}`);
+      }
+    } catch (_) {
+      showStudentAlert('Erro', 'Não foi possível enviar chamado de suporte.');
+    }
+  });
+}
+
+async function handleResolveSupportTicket(ticketId) {
+  try {
+    const res = await fetch('/api/support/resolve', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ticket_id: ticketId })
+    });
+    if (res.ok) {
+      const result = await res.json();
+      state.data = result.state;
+      sounds.play('ready');
+      showStaffAlert('Suporte concluído', 'Chamado do aluno marcado como atendido.');
+      showStudentAlert('Patrícia respondeu! ✅', 'Sua solicitação foi atendida no balcão.');
+    }
+  } catch (_) {}
 }
 
 function copyPixCode() {
@@ -744,12 +806,20 @@ function renderStudentGlobalHeader() {
         ${renderPitStopLogoWordmark({ darkBg: false, size: 'base' })}
       </div>
 
-      <div class="flex items-center gap-2.5">
+      <div class="flex items-center gap-2">
         <!-- Green Open Status Pill from PDF: "● Fecha às 20:30" -->
         <button onclick="navigateStudent('hours');"
           class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#E8F5E9] text-[#1B5E20] text-xs font-semibold hover:brightness-95 transition">
           <span class="w-2 h-2 rounded-full bg-[#2E7D32]"></span>
           <span>Fecha às 20:30</span>
+        </button>
+
+        <!-- Botão de Suporte de Atendente (Falar com Patrícia) -->
+        <button onclick="openSupportModal();"
+          title="Suporte da Atendente (Patrícia)"
+          class="px-2.5 py-1.5 rounded-full bg-white hover:bg-[#FFF0E6] text-[#1C1C1E] border border-[#E6DDD2] hover:border-[#EE651D] text-xs font-bold flex items-center gap-1 transition shadow-sm">
+          <span>👩‍🍳</span>
+          <span class="hidden sm:inline">Suporte</span>
         </button>
 
         <!-- Circular Menu Button (≡) from PDF -> Opens Tela 4 (Menu do Aluno) -->
@@ -996,7 +1066,7 @@ function renderStudentCheckoutScreen() {
     .filter(x => x.product && x.qty > 0);
 
   const isPixSelected = state.selectedPayment === 'PIX' || state.selectedPayment === 'COMBO_DIA' || state.selectedPayment === 'PITSTOP_WALLET' || state.selectedPayment === 'RESIDENCY_VOUCHER';
-  const isCounterSelected = state.selectedPayment === 'BALCAO';
+  const isCardSelected = state.selectedPayment === 'CARTAO' || state.selectedPayment === 'BALCAO';
 
   return `
     <div class="px-5 pb-6 flex-1 flex flex-col justify-between space-y-4">
@@ -1086,7 +1156,7 @@ function renderStudentCheckoutScreen() {
             class="w-full px-3.5 py-2 rounded-xl bg-white text-xs font-bold text-[#1C1C1E] border border-[#E6DDD2] focus:outline-none focus:border-[#EE651D]" />
         </div>
 
-        <!-- "Como quer pagar?" from PDF -->
+        <!-- "Como quer pagar?" -->
         <div class="space-y-2.5">
           <h2 class="text-base font-extrabold text-[#1C1C1E]">Como quer pagar?</h2>
 
@@ -1111,10 +1181,10 @@ function renderStudentCheckoutScreen() {
             </span>
           </div>
 
-          <!-- Option 2: Pagar na retirada -->
-          <div onclick="state.selectedPayment = 'BALCAO'; renderStudentOnly();"
+          <!-- Option 2: Pagar no cartão -->
+          <div onclick="state.selectedPayment = 'CARTAO'; renderStudentOnly();"
             class="p-4 rounded-3xl transition-all cursor-pointer flex items-center justify-between gap-3 ${
-              isCounterSelected
+              isCardSelected
                 ? 'bg-[#FFF8F3] border-2 border-[#EE651D] shadow-sm'
                 : 'bg-white border-2 border-transparent hover:border-[#E6DDD2]'
             }">
@@ -1123,8 +1193,8 @@ function renderStudentCheckoutScreen() {
                 💳
               </div>
               <div>
-                <p class="text-sm font-extrabold text-[#1C1C1E]">Pagar na retirada</p>
-                <p class="text-xs text-neutral-500">Na maquininha do balcão</p>
+                <p class="text-sm font-extrabold text-[#1C1C1E]">Pagar no cartão</p>
+                <p class="text-xs text-neutral-500">Crédito, débito ou aproximação (Apple & Google Pay)</p>
               </div>
             </div>
           </div>
@@ -1352,7 +1422,7 @@ function renderStudentMenuHubScreen() {
           </button>
         </div>
 
-        <!-- Quick Active Persona Info Box -->
+        <!-- Quick Active Persona Info Box & Support Button -->
         <div class="p-4 rounded-3xl bg-[#EFE6DC]/80 flex items-center justify-between gap-3">
           <div>
             <p class="text-[10px] font-extrabold uppercase tracking-wider text-[#B45309]">Persona Ativa no Protótipo</p>
@@ -1363,6 +1433,19 @@ function renderStudentMenuHubScreen() {
             Trocar
           </button>
         </div>
+
+        <!-- Botão Dedicado de Suporte da Atendente (Patrícia) -->
+        <button onclick="openSupportModal();"
+          class="w-full p-4 rounded-3xl bg-[#1C1C1E] hover:bg-neutral-800 text-white flex items-center justify-between gap-3 shadow-card transition">
+          <div class="flex items-center gap-3 text-left">
+            <span class="w-10 h-10 rounded-2xl bg-[#EE651D] flex items-center justify-center text-lg shrink-0">👩‍🍳</span>
+            <div>
+              <p class="text-sm font-extrabold text-white">Suporte da Atendente (Patrícia)</p>
+              <p class="text-xs text-neutral-400">Dúvida sobre ingrediente, atraso ou ajuda no balcão</p>
+            </div>
+          </div>
+          <span class="text-xs font-extrabold text-[#EE651D] shrink-0">Chamar →</span>
+        </button>
       </div>
 
       <!-- Sticky Bottom CTA from PDF: "Fazer um pedido" -->
@@ -1722,6 +1805,67 @@ function renderProductModal() {
   `;
 }
 
+function renderSupportModal() {
+  if (!state.showSupportModal) return '';
+  const topics = [
+    'Dúvida sobre ingrediente / alergia',
+    'Meu pedido está demorando',
+    'Ajuda com pagamento no cartão / Pix',
+    'Trocar item ou horário de retirada'
+  ];
+
+  return `
+    <div onclick="if (event.target === this) closeSupportModal();"
+      class="absolute inset-0 z-40 bg-black/50 backdrop-blur-sm rounded-[32px] p-4 flex items-center justify-center fade-in">
+      <div class="bg-[#FAF3EB] rounded-3xl w-full max-w-sm p-5 border border-[#E6DDD2] shadow-2xl space-y-4">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-2.5">
+            <span class="w-10 h-10 rounded-2xl bg-[#EE651D] text-white flex items-center justify-center text-lg">👩‍🍳</span>
+            <div>
+              <h3 class="text-base font-extrabold text-[#1C1C1E]">Suporte da Atendente</h3>
+              <p class="text-[11px] text-neutral-500">Fale direto com a Patrícia no balcão ${state.selectedLocation}</p>
+            </div>
+          </div>
+          <button onclick="closeSupportModal();" class="w-8 h-8 rounded-full bg-white text-[#1C1C1E] flex items-center justify-center shadow-sm">
+            ${ICONS.x}
+          </button>
+        </div>
+
+        <div class="space-y-1.5">
+          <label class="text-[11px] font-extrabold uppercase tracking-wider text-neutral-500">Qual o motivo do suporte?</label>
+          <div class="space-y-1.5">
+            ${topics.map(t => `
+              <button type="button" onclick="state.supportTopic = '${t}'; renderStudentOnly();"
+                class="w-full p-2.5 rounded-2xl text-left text-xs font-bold border transition flex items-center justify-between ${
+                  state.supportTopic === t
+                    ? 'bg-[#FFF8F3] border-[#EE651D] text-[#1C1C1E]'
+                    : 'bg-white border-[#E6DDD2] text-neutral-600 hover:bg-white'
+                }">
+                <span>${t}</span>
+                ${state.supportTopic === t ? '<span class="text-[#EE651D]">✓</span>' : ''}
+              </button>
+            `).join('')}
+          </div>
+        </div>
+
+        <div>
+          <label for="support-message-input" class="block text-[11px] font-extrabold uppercase tracking-wider text-neutral-500 mb-1">
+            Observação rápida (opcional)
+          </label>
+          <input id="support-message-input" type="text"
+            placeholder="Ex: Sou intolerante a lactose / Estou no balcão..."
+            class="w-full px-3.5 py-2.5 rounded-xl bg-white border border-[#E6DDD2] text-xs font-medium text-[#1C1C1E] focus:outline-none focus:border-[#EE651D]" />
+        </div>
+
+        <button onclick="handleSendSupportRequest(event);"
+          class="w-full py-3.5 rounded-2xl bg-[#EE651D] hover:bg-[#D95614] text-white font-extrabold text-sm transition shadow-orangeGlow">
+          Enviar Chamado para a Patrícia →
+        </button>
+      </div>
+    </div>
+  `;
+}
+
 function renderStudentLoadingHtml() {
   if (!state.studentLoading) return '';
   return `
@@ -1778,6 +1922,7 @@ function renderStudentSection() {
       ${state.studentScreen === 'discounts' ? renderStudentDiscountsScreen() : ''}
 
       <div id="student-modal-mount">${renderProductModal()}</div>
+      ${renderSupportModal()}
     </div>
   `;
 }
@@ -1886,7 +2031,7 @@ function renderStaffOrderCard(order) {
 
 function renderStaffSection() {
   const { catalog, dashboard } = state.data;
-  const { summary, hourly_chart, orders } = dashboard;
+  const { summary, hourly_chart, orders, support_tickets = [] } = dashboard;
 
   const queuedOrders = orders.filter(o => o.status === 'QUEUED');
   const preparingOrders = orders.filter(o => o.status === 'PREPARING');
@@ -1898,6 +2043,31 @@ function renderStaffSection() {
       <div id="staff-loading-mount">${renderStaffLoadingHtml()}</div>
 
       <div class="p-4 sm:p-5 flex-1 min-w-0">
+        ${support_tickets.length > 0 ? `
+          <div class="mb-4 p-3.5 rounded-2xl bg-[#FFF8F3] border-2 border-[#EE651D] space-y-2 fade-in">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-extrabold text-[#EE651D] uppercase tracking-wider">
+                👩‍🍳 Chamados de Suporte no Balcão (${support_tickets.length})
+              </span>
+              <span class="text-[10px] font-mono text-neutral-500">Prioridade de Atendimento</span>
+            </div>
+            <div class="space-y-2">
+              ${support_tickets.map(t => `
+                <div class="p-2.5 rounded-xl bg-white border border-[#E6DDD2] flex items-center justify-between gap-2 text-xs">
+                  <div>
+                    <p class="font-extrabold text-[#1C1C1E]">${t.student_name} · <span class="text-[#EE651D]">Balcão ${t.location_name}</span></p>
+                    <p class="text-[11px] text-neutral-600"><strong>${t.topic}:</strong> ${t.message}</p>
+                  </div>
+                  <button onclick="handleResolveSupportTicket(${t.id});"
+                    class="px-3 py-1.5 rounded-xl bg-[#2E7D32] hover:bg-[#1B5E20] text-white text-[11px] font-extrabold shrink-0">
+                    ✓ Atender Aluno
+                  </button>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        ` : ''}
+
         ${state.staffSection === 'queue' ? `
           <div class="space-y-4">
             <!-- Real Capacity Strip for Patrícia (From Personas PDF) -->

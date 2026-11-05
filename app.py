@@ -9,9 +9,10 @@ import json
 import mimetypes
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from pathlib import Path
-from typing import Dict, Any
+from typing import Dict, Any, List
 from urllib.parse import urlparse
 
+from domain.entities import SupportTicket
 from domain.strategies import build_payment_registry, SmartQueueCalculator
 from domain.services import InventoryService, OrderService, LiveMetricsEngine
 from domain.code_metrics import build_chapter5_report
@@ -24,46 +25,89 @@ STATIC_DIR = BASE_DIR / "static"
 
 
 class ApplicationContainer:
-    """Dependency Injection Container wiring low-level adapters into high-level domain services."""
+    """
+    Dependency Injection Container applying Information Hiding & Law of Demeter:
+    Internal adapters and services are private (`_repository`, `_order_service`, etc.),
+    exposing only cohesive high-level operations to the HTTP adapter.
+    """
 
     def __init__(self, db_path: Path) -> None:
-        self.repository = SqliteCanteenRepository(str(db_path))
-        self.payment_registry = build_payment_registry()
-        self.queue_calculator = SmartQueueCalculator(
+        self._repository = SqliteCanteenRepository(str(db_path))
+        self._payment_registry = build_payment_registry()
+        self._queue_calculator = SmartQueueCalculator(
             parallel_stations=2, snacks_per_cycle=4, cycle_minutes=2
         )
 
-        self.inventory_service = InventoryService(self.repository)
-        self.order_service = OrderService(
-            inventory_manager=self.repository,
-            order_repository=self.repository,
-            payment_strategies=self.payment_registry,
-            queue_calculator=self.queue_calculator,
+        self._inventory_service = InventoryService(self._repository)
+        self._order_service = OrderService(
+            inventory_manager=self._repository,
+            order_repository=self._repository,
+            payment_strategies=self._payment_registry,
+            queue_calculator=self._queue_calculator,
         )
-        self.metrics_engine = LiveMetricsEngine(
-            inventory_manager=self.repository,
-            order_repository=self.repository,
-            queue_calculator=self.queue_calculator,
+        self._metrics_engine = LiveMetricsEngine(
+            inventory_manager=self._repository,
+            order_repository=self._repository,
+            queue_calculator=self._queue_calculator,
         )
+        self._support_tickets: List[SupportTicket] = []
+
+    def place_order(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        return self._order_service.place_order(payload)
+
+    def advance_order_stage(self, order_id: int) -> Dict[str, Any]:
+        return self._order_service.advance_order_stage(order_id)
+
+    def re_notify_order(self, order_id: int) -> Dict[str, Any]:
+        return self._order_service.re_notify_order(order_id)
+
+    def register_product(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        return self._inventory_service.register_product(payload)
+
+    def adjust_stock(self, product_id: int, new_stock: int) -> Dict[str, Any]:
+        return self._inventory_service.adjust_stock(product_id, new_stock)
+
+    def create_support_ticket(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        ticket = SupportTicket(
+            ticket_id=len(self._support_tickets) + 1,
+            student_name=str(payload.get("student_name", "Aluno CESAR")),
+            pickup_location=str(payload.get("pickup_location", "BRUM")),
+            topic=str(payload.get("topic", "Ajuda com Pedido")),
+            message=str(payload.get("message", "Solicitou atendimento da Patrícia.")),
+        )
+        self._support_tickets.insert(0, ticket)
+        return ticket.to_dict()
+
+    def resolve_support_ticket(self, ticket_id: int) -> None:
+        for ticket in self._support_tickets:
+            if ticket.id == ticket_id:
+                ticket.resolve()
+
+    def reset_demo_database(self) -> None:
+        self._repository.reset_demo_database()
+        self._support_tickets.clear()
 
     def get_full_state(self) -> Dict[str, Any]:
-        dashboard = self.metrics_engine.build_live_dashboard()
-        catalog = self.inventory_service.list_catalog()
+        dashboard = self._metrics_engine.build_live_dashboard()
+        dashboard["support_tickets"] = [
+            t.to_dict() for t in self._support_tickets if t.is_open
+        ]
+        catalog = self._inventory_service.list_catalog()
         allowed_methods = [
             "PIX",
-            "BALCAO",
+            "CARTAO",
             "COMBO_DIA",
             "PITSTOP_WALLET",
             "RESIDENCY_VOUCHER",
         ]
         payment_methods = [
             {
-                "code": self.payment_registry[code].code(),
-                "name": self.payment_registry[code].display_name(),
-                "description": self.payment_registry[code].short_description(),
+                "code": self._payment_registry[code].code(),
+                "name": self._payment_registry[code].display_name(),
+                "description": self._payment_registry[code].short_description(),
             }
             for code in allowed_methods
-            if code in self.payment_registry
+            if code in self._payment_registry
         ]
         return {
             "catalog": catalog,
@@ -144,7 +188,7 @@ class PitStopHttpHandler(BaseHTTPRequestHandler):
             body = self._read_json_body()
 
             if route == "/api/orders":
-                created_order = CONTAINER.order_service.place_order(body)
+                created_order = CONTAINER.place_order(body)
                 self._send_json(
                     201,
                     {
@@ -156,7 +200,7 @@ class PitStopHttpHandler(BaseHTTPRequestHandler):
 
             if route == "/api/orders/advance":
                 order_id = int(body.get("order_id", 0))
-                updated_order = CONTAINER.order_service.advance_order_stage(order_id)
+                updated_order = CONTAINER.advance_order_stage(order_id)
                 self._send_json(
                     200,
                     {
@@ -168,7 +212,7 @@ class PitStopHttpHandler(BaseHTTPRequestHandler):
 
             if route == "/api/orders/re-notify":
                 order_id = int(body.get("order_id", 0))
-                updated_order = CONTAINER.order_service.re_notify_order(order_id)
+                updated_order = CONTAINER.re_notify_order(order_id)
                 self._send_json(
                     200,
                     {
@@ -179,7 +223,7 @@ class PitStopHttpHandler(BaseHTTPRequestHandler):
                 return
 
             if route == "/api/products":
-                created_product = CONTAINER.inventory_service.register_product(body)
+                created_product = CONTAINER.register_product(body)
                 self._send_json(
                     201,
                     {
@@ -192,9 +236,7 @@ class PitStopHttpHandler(BaseHTTPRequestHandler):
             if route == "/api/products/stock":
                 product_id = int(body.get("product_id", 0))
                 new_stock = int(body.get("new_stock", 0))
-                updated_product = CONTAINER.inventory_service.adjust_stock(
-                    product_id, new_stock
-                )
+                updated_product = CONTAINER.adjust_stock(product_id, new_stock)
                 self._send_json(
                     200,
                     {
@@ -204,8 +246,25 @@ class PitStopHttpHandler(BaseHTTPRequestHandler):
                 )
                 return
 
+            if route == "/api/support":
+                ticket = CONTAINER.create_support_ticket(body)
+                self._send_json(
+                    201,
+                    {
+                        "ticket": ticket,
+                        "state": CONTAINER.get_full_state(),
+                    },
+                )
+                return
+
+            if route == "/api/support/resolve":
+                ticket_id = int(body.get("ticket_id", 0))
+                CONTAINER.resolve_support_ticket(ticket_id)
+                self._send_json(200, {"state": CONTAINER.get_full_state()})
+                return
+
             if route == "/api/reset":
-                CONTAINER.repository.reset_demo_database()
+                CONTAINER.reset_demo_database()
                 self._send_json(200, {"state": CONTAINER.get_full_state()})
                 return
 

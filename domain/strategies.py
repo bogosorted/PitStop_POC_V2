@@ -30,15 +30,15 @@ class InstantPixPayment(PaymentStrategy):
         return round(max(0.0, subtotal), 2)
 
 
-class PayOnPickupPayment(PaymentStrategy):
+class ContactlessCardPayment(PaymentStrategy):
     def code(self) -> str:
-        return "BALCAO"
+        return "CARTAO"
 
     def display_name(self) -> str:
-        return "Pagar na retirada"
+        return "Pagar no cartão"
 
     def short_description(self) -> str:
-        return "Na maquininha do balcão"
+        return "Crédito, débito ou aproximação (Apple & Google Pay)"
 
     def calculate_final_amount(self, subtotal: float) -> float:
         return round(max(0.0, subtotal), 2)
@@ -131,9 +131,11 @@ class SmartQueueCalculator(QueueSlaCalculator):
 def build_payment_registry() -> Dict[str, PaymentStrategy]:
     strategies: List[PaymentStrategy] = [
         InstantPixPayment(),
-        PayOnPickupPayment(),
+        ContactlessCardPayment(),
         DailyComboDiscountPayment(),
         PitStopWalletPayment(),
         ResidencyVoucherPayment(),
     ]
-    return {strategy.code(): strategy for strategy in strategies}
+    registry = {strategy.code(): strategy for strategy in strategies}
+    registry["BALCAO"] = registry["CARTAO"]
+    return registry

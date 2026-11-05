@@ -1,9 +1,10 @@
 """
 Chapter 5 Design Principles applied in this module:
 1. Information Hiding (Encapsulation):
-   - Internal attributes (_stock, _price, _status) are private.
-   - Domain invariants (stock never becomes negative; out-of-stock flag is automatically derived)
-     are strictly enforced inside the Product class methods.
+   - 100% of internal attributes in `Product`, `OrderItem`, `Order`, and `SupportTicket`
+     are private (`_id`, `_stock`, `_price`, `_status`, `_quantity`, etc.).
+   - Domain invariants (stock never becomes negative; quantity > 0; out-of-stock flag is automatically derived)
+     are strictly enforced inside class methods.
 2. Law of Demeter (Principle of Least Knowledge):
    - Methods such as `order.is_delayed(now)` and `order.advance_status()` encapsulate internal
      transitions and prevent callers from chaining internal objects.
@@ -12,7 +13,6 @@ Chapter 5 Design Principles applied in this module:
      while user-facing strings remain in Portuguese for the end user.
 """
 
-from dataclasses import dataclass
 from datetime import datetime
 from typing import List, Dict, Any
 
@@ -57,7 +57,7 @@ PERSONA_PROFILES = [
         "short_name": "Lucas",
         "role": "O aluno com pressa",
         "quote": "Quero chegar à cantina, pegar meu lanche e aproveitar meus 15 minutos.",
-        "goal": "Pedir antes, pagar pelo celular (Pix) e retirar rapidamente com a senha.",
+        "goal": "Pedir antes, pagar pelo celular (Pix ou Cartão) e retirar rapidamente com a senha.",
         "default_location": "BRUM",
         "default_slot": "15:45",
         "default_payment": "PIX",
@@ -90,8 +90,8 @@ PERSONA_PROFILES = [
 class Product:
     """
     Domain Entity applying Information Hiding.
-    The `_stock` attribute is private and can only be modified through validated
-    domain operations that preserve the invariant: stock >= 0.
+    The `_stock` and `_price` attributes are private and can only be modified through validated
+    domain operations that preserve the invariant: stock >= 0 and price >= 0.
     """
 
     def __init__(
@@ -209,28 +209,70 @@ class Product:
         }
 
 
-@dataclass(frozen=True)
 class OrderItem:
-    product_id: int
-    product_name: str
-    quantity: int
-    unit_price: float
-    prep_time_min: int
-    image_url: str = "/static/images/coxinha.jpg"
+    """
+    Value Object with strict Information Hiding.
+    All internal fields are private (`_product_id`, `_quantity`, `_unit_price`, etc.)
+    and validated on construction.
+    """
+
+    def __init__(
+        self,
+        product_id: int,
+        product_name: str,
+        quantity: int,
+        unit_price: float,
+        prep_time_min: int,
+        image_url: str = "/static/images/coxinha.jpg",
+    ) -> None:
+        if quantity <= 0:
+            raise ValueError("A quantidade do item deve ser positiva.")
+        if unit_price < 0:
+            raise ValueError("O preço unitário não pode ser negativo.")
+        self._product_id = int(product_id)
+        self._product_name = str(product_name).strip()
+        self._quantity = int(quantity)
+        self._unit_price = round(float(unit_price), 2)
+        self._prep_time_min = max(1, int(prep_time_min))
+        self._image_url = image_url or "/static/images/coxinha.jpg"
+
+    @property
+    def product_id(self) -> int:
+        return self._product_id
+
+    @property
+    def product_name(self) -> str:
+        return self._product_name
+
+    @property
+    def quantity(self) -> int:
+        return self._quantity
+
+    @property
+    def unit_price(self) -> float:
+        return self._unit_price
+
+    @property
+    def prep_time_min(self) -> int:
+        return self._prep_time_min
+
+    @property
+    def image_url(self) -> str:
+        return self._image_url
 
     @property
     def subtotal(self) -> float:
-        return round(self.quantity * self.unit_price, 2)
+        return round(self._quantity * self._unit_price, 2)
 
     def to_dict(self) -> Dict[str, Any]:
         return {
-            "product_id": self.product_id,
-            "product_name": self.product_name,
-            "quantity": self.quantity,
-            "unit_price": self.unit_price,
-            "prep_time_min": self.prep_time_min,
+            "product_id": self._product_id,
+            "product_name": self._product_name,
+            "quantity": self._quantity,
+            "unit_price": self._unit_price,
+            "prep_time_min": self._prep_time_min,
             "subtotal": self.subtotal,
-            "image_url": self.image_url,
+            "image_url": self._image_url,
         }
 
 
@@ -413,4 +455,56 @@ class Order:
             "is_delayed": is_delayed,
             "was_delayed": was_delayed,
             "urgency_level": self.urgency_level(now),
+        }
+
+
+class SupportTicket:
+    """
+    Encapsulated entity for Student -> Attendant (Patrícia) live support requests.
+    """
+
+    def __init__(
+        self,
+        ticket_id: int,
+        student_name: str,
+        pickup_location: str,
+        topic: str,
+        message: str,
+        status: str = "OPEN",
+        created_at: str = "",
+    ) -> None:
+        self._id = int(ticket_id)
+        self._student_name = student_name.strip() or "Aluno CESAR"
+        self._pickup_location = (
+            pickup_location if pickup_location in PICKUP_LOCATIONS else "BRUM"
+        )
+        self._topic = topic.strip() or "Ajuda no Pedido"
+        self._message = message.strip() or "Solicitou suporte da atendente."
+        self._status = status if status in ("OPEN", "RESOLVED") else "OPEN"
+        self._created_at = created_at or datetime.now().strftime("%H:%M")
+
+    @property
+    def id(self) -> int:
+        return self._id
+
+    @property
+    def is_open(self) -> bool:
+        return self._status == "OPEN"
+
+    def resolve(self) -> None:
+        self._status = "RESOLVED"
+
+    def to_dict(self) -> Dict[str, Any]:
+        loc_info = PICKUP_LOCATIONS.get(
+            self._pickup_location, PICKUP_LOCATIONS["BRUM"]
+        )
+        return {
+            "id": self._id,
+            "student_name": self._student_name,
+            "pickup_location": self._pickup_location,
+            "location_name": loc_info["name"],
+            "topic": self._topic,
+            "message": self._message,
+            "status": self._status,
+            "created_at": self._created_at,
         }
