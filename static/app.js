@@ -432,6 +432,13 @@ function getLocationWaitMinutes(locCode) {
   return baseSla + extraCycles * 2;
 }
 
+function getEstimatedPickupClock(waitMin) {
+  const target = new Date(Date.now() + Number(waitMin || 7) * 60000);
+  const hh = String(target.getHours()).padStart(2, '0');
+  const mm = String(target.getMinutes()).padStart(2, '0');
+  return `${hh}:${mm}`;
+}
+
 // --- Submit Order (Tela 2 -> Tela 3 Pix & Senha PS-105) ---
 async function handleOrderSubmit() {
   const items = Object.entries(state.cart)
@@ -451,10 +458,13 @@ async function handleOrderSubmit() {
     state.studentName = nameInput.value.trim();
   }
 
+  const waitMin = getLocationWaitMinutes(state.selectedLocation || 'BRUM');
+  const estimatedClock = getEstimatedPickupClock(waitMin);
+
   const payload = {
     student_name: state.studentName || 'Lucas (CC)',
     pickup_location: state.selectedLocation || 'BRUM',
-    time_slot: state.selectedTimeSlot || '15:45',
+    time_slot: `~${estimatedClock} (~${waitMin} min)`,
     payment_method: state.selectedPayment || 'PIX',
     items
   };
@@ -908,26 +918,6 @@ function renderStudentHomeScreen() {
           }).join('')}
         </div>
 
-        <!-- Shift & Capacity Bar (Personas PDF: Agendamento conforme capacidade + Almoço do dia) -->
-        <div class="flex items-center justify-between gap-2 px-3.5 py-2 rounded-2xl bg-[#EFE6DC]/75 text-[11px]">
-          <div class="flex items-center gap-1.5 text-[#1C1C1E] font-semibold truncate">
-            <span>🕒 Retirada:</span>
-            ${['09:45', '11:30', '15:45', '18:30'].map(slot => `
-              <button onclick="state.selectedTimeSlot = '${slot}'; renderStudentOnly();"
-                class="px-2 py-0.5 rounded-lg font-mono text-[11px] transition ${
-                  state.selectedTimeSlot === slot
-                    ? 'bg-[#1C1C1E] text-white font-bold'
-                    : 'text-neutral-600 hover:bg-white/60'
-                }">
-                ${slot}
-              </button>
-            `).join('')}
-          </div>
-          <span class="text-[10px] font-mono text-[#B45309] font-bold shrink-0 hidden sm:inline">
-            🔥 4 un./ciclo 2m
-          </span>
-        </div>
-
         <!-- Dark Banner from PDF: "Combo do dia - Café + pão de queijo com desconto" -->
         <div onclick="applyDailyCombo();"
           class="p-4 rounded-3xl bg-[#1C1C1E] text-white flex items-center justify-between gap-3.5 cursor-pointer hover:brightness-110 transition shadow-card group">
@@ -1059,6 +1049,7 @@ function renderStudentCheckoutScreen() {
   const { pickup_locations } = dashboard;
   const cartInfo = getCartMetrics();
   const waitMin = getLocationWaitMinutes(state.selectedLocation);
+  const estimatedClock = getEstimatedPickupClock(waitMin);
   const locObj = pickup_locations.find(l => l.code === state.selectedLocation) || { name: 'Brum' };
 
   const cartEntries = Object.entries(state.cart)
@@ -1080,7 +1071,9 @@ function renderStudentCheckoutScreen() {
             </button>
             <h1 class="text-2xl font-extrabold text-[#1C1C1E] tracking-tight">Pagamento</h1>
           </div>
-          <span class="text-xs font-semibold text-neutral-500">Retirada ${state.selectedTimeSlot}</span>
+          <span class="px-2.5 py-1 rounded-full bg-[#FFF0E6] text-[#EE651D] text-xs font-extrabold">
+            ⏱️ Retirada ~${estimatedClock}
+          </span>
         </div>
 
         <!-- Single White Summary Card from PDF -->
@@ -1115,6 +1108,17 @@ function renderStudentCheckoutScreen() {
               <span>- ${formatBRL(cartInfo.discount)}</span>
             </div>
           ` : ''}
+
+          <!-- Pickup Estimation Banner inside the Order Summary -->
+          <div class="px-3.5 py-2.5 rounded-2xl bg-[#FAF3EB] border border-[#E6DDD2] flex items-center justify-between gap-2 text-xs">
+            <div class="flex items-center gap-2 text-[#1C1C1E] font-bold">
+              <span class="text-sm">⏱️</span>
+              <span>Estimativa de retirada (${locObj.name}):</span>
+            </div>
+            <span class="font-extrabold text-[#EE651D]">
+              ~${estimatedClock} (em ~${waitMin} min)
+            </span>
+          </div>
 
           <!-- Bottom Row of Summary Card from PDF: "Brum · pronto em ~8 min" | "R$ [total]" -->
           <div class="pt-3 border-t border-neutral-100 flex items-center justify-between">
@@ -1331,6 +1335,9 @@ function renderStudentPixScreen() {
               : state.pixPaymentConfirmed || isPreparing
               ? `Liberada · Retirada no balcão ${locName}`
               : 'Liberada após o pagamento'}
+          </p>
+          <p class="text-[11px] font-bold text-[#EE651D] mt-1">
+            ⏱️ Estimativa de retirada: ${order && order.time_slot ? order.time_slot : `~${getEstimatedPickupClock(getLocationWaitMinutes(state.selectedLocation))} (~${getLocationWaitMinutes(state.selectedLocation)} min)`}
           </p>
         </div>
         <span class="text-3xl sm:text-4xl font-extrabold text-[#EE651D] tracking-tight font-mono">
