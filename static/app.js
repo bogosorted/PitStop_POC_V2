@@ -2385,6 +2385,40 @@ function renderChapter5View() {
         <p class="text-xs text-[#1C1C1E]"><strong>Problema (Go-Horse):</strong> ${ch5.ai_mistake_story.problem}</p>
         <p class="text-xs text-[#2E7D32]"><strong>Correção (Cap. 5):</strong> ${ch5.ai_mistake_story.correction}</p>
       </div>
+
+      <!-- Equipe em Formato XP (Extreme Programming) & Relatório -->
+      <div class="p-6 rounded-[32px] bg-white shadow-card space-y-4">
+        <div>
+          <span class="text-xs font-extrabold uppercase tracking-wider text-[#EE651D]">Cap. 2 FDS · Extreme Programming (XP)</span>
+          <h2 class="text-lg font-extrabold text-[#1C1C1E] mt-0.5">Organização da Equipe em Pares XP & Relatório de Execução</h2>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3.5 text-xs">
+          <div class="p-4 rounded-2xl bg-[#FAF3EB] border border-[#E6DDD2]">
+            <span class="font-mono text-[10px] font-bold text-[#EE651D]">DUPLA XP 1 · DESIGN VISUAL & PROTOTIPAÇÃO</span>
+            <h4 class="text-sm font-extrabold text-[#1C1C1E] mt-0.5">Andressa & Vitor</h4>
+            <p class="text-neutral-600 mt-1">Concepção do redesign para 15 minutos, identidade visual PitStop CESAR (#FAF3EB, #EE651D, #1C1C1E), hierarquia dos cards 2x2 e protótipo de alta fidelidade.</p>
+          </div>
+
+          <div class="p-4 rounded-2xl bg-[#FAF3EB] border border-[#E6DDD2]">
+            <span class="font-mono text-[10px] font-bold text-[#EE651D]">DUPLA XP 2 · CRIAÇÃO DO SITE, ARQUITETURA & REVISÃO DE PROMPT</span>
+            <h4 class="text-sm font-extrabold text-[#1C1C1E] mt-0.5">Lívia & Gabriel Aragão</h4>
+            <p class="text-neutral-600 mt-1">Construção full-stack do site, revisão e refinamento iterativo dos prompts e implementação dos Princípios do Cap. 5 (Ocultamento, SRP LCOM=0, OCP, DIP/ISP e métricas AST).</p>
+          </div>
+
+          <div class="p-4 rounded-2xl bg-[#FAF3EB] border border-[#E6DDD2]">
+            <span class="font-mono text-[10px] font-bold text-[#EE651D]">DUPLA XP 3 · CRIAÇÃO DE PROMPTS, UI & UX</span>
+            <h4 class="text-sm font-extrabold text-[#1C1C1E] mt-0.5">Ricardo & Renato</h4>
+            <p class="text-neutral-600 mt-1">Engenharia inicial de prompts, desenho da jornada de compra em 3 toques (Vitrine → Pix/Cartão → Senha PS-105), Suporte da Atendente e usabilidade mobile-first.</p>
+          </div>
+
+          <div class="p-4 rounded-2xl bg-[#FAF3EB] border border-[#E6DDD2]">
+            <span class="font-mono text-[10px] font-bold text-[#EE651D]">DUPLA XP 4 · PESQUISA DE CAMPO, PERSONAS, VIABILIDADE & REVISÃO IA</span>
+            <h4 class="text-sm font-extrabold text-[#1C1C1E] mt-0.5">Rodrigo & João</h4>
+            <p class="text-neutral-600 mt-1">Pesquisa de campo na cantina, levantamento de empecilhos reais (~200 alunos, 2 atendentes, 4 salgados/ciclo de 2m), criação das 4 personas e revisão conceitual do Cap. 5 via IA.</p>
+          </div>
+        </div>
+      </div>
     </div>
   `;
 }
